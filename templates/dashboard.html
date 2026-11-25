@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PowerWatch SA — Load-Shedding &amp; Backup Monitor</title>
+<style>
+  :root { --navy:#1E2761; --navy-dark:#161C4A; --amber:#E8A33D; --ice:#CADCFC; --bg:#F4F6FB; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; background: var(--bg); margin: 0; color: #222437; }
+  header { background: var(--navy); color: #fff; padding: 20px 28px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; color: var(--ice); font-size: 13px; }
+  .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: #fff; border-radius: 10px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(30,39,97,.08); }
+  .card h2 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: #6B7280; }
+  .big { font-size: 30px; font-weight: bold; color: var(--navy); }
+  .status-up { color: #1F7A3D; }
+  .status-down { color: #B23B3B; }
+  .pill { display: inline-block; padding: 4px 12px; border-radius: 999px; font-weight: bold; font-size: 13px; }
+  .pill-up { background: #DCF5E3; color: #1F7A3D; }
+  .pill-down { background: #FBE3E3; color: #B23B3B; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #E3E7F0; }
+  th { color: #6B7280; font-weight: bold; }
+  #chart { width: 100%; height: 160px; }
+  .muted { color: #6B7280; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PowerWatch SA</h1>
+  <p>Load-shedding &amp; backup power monitor — The Connected Minds, BICT352</p>
+</header>
+
+<div class="wrap">
+  <div class="grid">
+    <div class="card">
+      <h2>Grid status</h2>
+      <div id="grid-status" class="big">—</div>
+      <div id="last-update" class="muted"></div>
+    </div>
+    <div class="card">
+      <h2>Backup battery</h2>
+      <div id="battery-pct" class="big">—</div>
+      <div id="battery-v" class="muted"></div>
+    </div>
+    <div class="card">
+      <h2>Outages logged</h2>
+      <div id="outage-count" class="big">—</div>
+      <div id="outage-minutes" class="muted"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Battery level — last 60 readings</h2>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Recent events</h2>
+    <table>
+      <thead><tr><th>Time</th><th>Event</th><th>Battery at the time</th></tr></thead>
+      <tbody id="events-body"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function refresh() {
+  const res = await fetch('/status');
+  const data = await res.json();
+
+  const gridEl = document.getElementById('grid-status');
+  gridEl.textContent = data.current.grid_up ? 'POWER ON' : 'LOAD-SHEDDING';
+  gridEl.className = 'big ' + (data.current.grid_up ? 'status-up' : 'status-down');
+
+  document.getElementById('last-update').textContent = 'Updated ' + (data.current.last_update || '—');
+  document.getElementById('battery-pct').textContent = data.current.battery_percent.toFixed(0) + '%';
+  document.getElementById('battery-v').textContent = data.current.battery_voltage.toFixed(2) + ' V';
+  document.getElementById('outage-count').textContent = data.stats.total_outages;
+  document.getElementById('outage-minutes').textContent = data.stats.total_minutes + ' min total downtime';
+
+  const tbody = document.getElementById('events-body');
+  tbody.innerHTML = '';
+  if (data.recent_events.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="muted">No events logged yet.</td></tr>';
+  }
+  data.recent_events.forEach(ev => {
+    const pill = ev.event_type === 'outage_start'
+      ? '<span class="pill pill-down">Outage started</span>'
+      : '<span class="pill pill-up">Power recovered</span>';
+    tbody.innerHTML += `<tr><td>${ev.timestamp}</td><td>${pill}</td><td>${ev.battery_percent.toFixed(0)}%</td></tr>`;
+  });
+
+  drawChart(data.readings);
+}
+
+function drawChart(readings) {
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.clientWidth; canvas.height = 160;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (readings.length < 2) return;
+
+  const w = canvas.width, h = canvas.height, pad = 20;
+  ctx.strokeStyle = '#1E2761'; ctx.lineWidth = 2; ctx.beginPath();
+  readings.forEach((r, i) => {
+    const x = pad + (i / (readings.length - 1)) * (w - pad * 2);
+    const y = h - pad - (r.battery_percent / 100) * (h - pad * 2);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+refresh();
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

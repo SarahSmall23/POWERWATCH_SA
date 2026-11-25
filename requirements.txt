@@ -1,0 +1,4 @@
+cherrypy>=18.8
+requests>=2.31
+gpiozero>=2.0      # only needed on real Raspberry Pi hardware
+spidev>=3.6        # only needed on real Raspberry Pi hardware (MCP3008 ADC)
